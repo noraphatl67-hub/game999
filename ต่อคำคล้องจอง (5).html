@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ต่อคำคล้องจอง</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff4d6;--card:#fffdf5;--ink:#2a1f14;--mute:#8b7a62;--line:#2a1f14;--a:#ff5d73;--b:#3b82f6;--ok:#16a34a;--bad:#dc2626;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1710;--card:#2a2118;--ink:#f6ebd8;--mute:#a8987f;--line:#f6ebd8}}
+:root[data-theme="dark"]{--bg:#1d1710;--card:#2a2118;--ink:#f6ebd8;--mute:#a8987f;--line:#f6ebd8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans Thai","Sarabun",system-ui,sans-serif;display:flex;justify-content:center}
+.app{width:100%;max-width:560px;padding:16px 14px 28px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.5px}
+h1 span{background:var(--a);color:#fff;padding:0 8px;border-radius:8px;display:inline-block;transform:rotate(-3deg)}
+.card{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;box-shadow:4px 4px 0 var(--line)}
+.big{text-align:center;padding:22px 14px}
+.big small{color:var(--mute);display:block}
+.big .w{font-size:44px;font-weight:800;line-height:1.3;word-break:break-word}
+.turn{font-weight:600;margin-top:6px}
+.turn.mine{color:var(--a)}
+.chain{display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center;max-height:200px;overflow-y:auto}
+.p{border:2px solid var(--line);border-radius:999px;padding:2px 12px;font-weight:600;background:var(--card)}
+.p em{font-style:normal;font-size:10px;color:var(--mute);margin-left:4px}
+.ar{color:var(--mute)}
+.row{display:flex;gap:8px}
+input{flex:1;font:inherit;font-size:18px;color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:14px;padding:10px 14px;outline:none;min-width:0}
+button{font:inherit;font-weight:700;cursor:pointer;border:2px solid var(--line);border-radius:14px;background:var(--a);color:#fff;padding:10px 16px;box-shadow:2px 2px 0 var(--line)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.g{background:var(--card);color:var(--ink);font-size:13px;padding:6px 12px}
+.msg{min-height:22px;font-size:14px;margin-top:8px}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.sc{display:flex;flex-direction:column;gap:6px}
+.sc div{display:flex;align-items:center;gap:8px}
+.dot{width:12px;height:12px;border-radius:50%}
+.sc b{margin-left:auto}
+.sc .cur{font-weight:800}
+.ref{display:flex;gap:10px;align-items:flex-start;background:var(--b);color:#fff;border:2px solid var(--line);border-radius:16px;padding:10px 14px;box-shadow:3px 3px 0 var(--line);font-size:14px}.ref .face{font-size:28px;line-height:1}.ref b{display:block;font-size:12px;opacity:.85}
+.bar{display:flex;align-items:center;gap:10px}.bar .code{font-size:24px;font-weight:800;letter-spacing:6px}.tm{margin-left:auto;font-weight:800;font-size:18px}
+.hint{font-size:12px;color:var(--mute)}
+.join{text-align:center;display:flex;flex-direction:column;gap:12px}
+.sw{display:flex;gap:8px;justify-content:center}
+.sw i{width:30px;height:30px;border-radius:50%;cursor:pointer;border:3px solid transparent}
+.sw i.on{border-color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+(function(){
+var COLORS=["#e8590c","#2f9e44","#1c7ed6","#ae3ec9","#d6336c","#0c8599"];
+var app=document.getElementById("app");
+var me={id:null,name:"",color:COLORS[0]};
+var db=null,sample=null,players=[],words=[],busy=false;
+var room='',base='',unsubs=[],allCount=0,tick=null,timeoutKey=-1,TURN=30,usr=null,writeErr=false,readErr=false;
+var refs={};
+try{var s=JSON.parse(localStorage.getItem("rc-me")||"null");if(s){me.name=s.name||"";me.color=s.color||me.color}}catch(e){}
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+
+var noRuntime=typeof window.claude==="undefined";
+(async function(){
+  try{if(!window.claude)throw 0;var u=await claude.use("user");usr=u;if(u)me.id=await u.id();db=await claude.use("db");sample=await claude.use("sample")}catch(e){}
+  if(!me.id)me.id="guest"+Math.random().toString(36).slice(2,8);
+  me.name?lobby():join();
+})();
+
+function join(){
+  app.textContent="";
+  var c=el("div","card join");
+  c.appendChild(el("h1","","ต่อคำ"+" ")).appendChild(el("span","","คล้องจอง"));
+  c.appendChild(el("div","hint","ต่อคำให้คล้องจองกับคำก่อนหน้า จะพ้องรูปหรือพ้องเสียงก็ได้"));
+  var inp=el("input");inp.placeholder="ชื่อเล่น";inp.maxLength=16;inp.value=me.name;c.appendChild(inp);
+  var sw=el("div","sw");
+  COLORS.forEach(function(k){var i=document.createElement("i");i.style.background=k;if(k===me.color)i.className="on";
+    i.onclick=function(){me.color=k;[].forEach.call(sw.children,function(x){x.className=""});i.className="on"};sw.appendChild(i)});
+  c.appendChild(sw);
+  var go=el("button","","เข้าเกม");
+  go.onclick=function(){var n=inp.value.trim();if(!n){inp.focus();return}me.name=n;try{localStorage.setItem("rc-me",JSON.stringify(me))}catch(e){}lobby()};
+  inp.onkeydown=function(e){if(e.key==="Enter")go.click()};
+  c.appendChild(go);app.appendChild(c);
+}
+
+function lobby(){
+  unsubs.forEach(function(u){try{u()}catch(e){}});unsubs=[];
+  if(tick){clearInterval(tick);tick=null}
+  refs={};app.textContent="";
+  var c=el("div","card join");
+  var h=el("h1","","ต่อคำ ");h.appendChild(el("span","","คล้องจอง"));c.appendChild(h);
+  c.appendChild(el("div","hint","สวัสดี "+me.name+" สร้างห้องแล้วส่งรหัสให้เพื่อน หรือใส่รหัสที่เพื่อนส่งมา"));
+  var mk=el("button","","สร้างห้องใหม่");
+  mk.onclick=function(){var A="ABCDEFGHJKLMNPQRSTUVWXYZ",k="";for(var i=0;i<4;i++)k+=A[Math.floor(Math.random()*A.length)];enter(k)};
+  c.appendChild(mk);
+  c.appendChild(el("div","hint","หรือเข้าห้องที่มีอยู่"));
+  var inp=el("input");inp.placeholder="รหัสห้อง";inp.maxLength=6;inp.style.textAlign="center";inp.style.letterSpacing="6px";
+  try{inp.value=localStorage.getItem("rc-room")||""}catch(e){}
+  var go=el("button","","เข้าห้อง");
+  go.onclick=function(){var v=inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");if(v.length<3){inp.focus();return}enter(v)};
+  inp.onkeydown=function(e){if(e.key==="Enter")go.click()};
+  c.appendChild(inp);c.appendChild(go);
+  var ch=el("button","g","เปลี่ยนชื่อ/สี");ch.onclick=join;c.appendChild(ch);
+  if(!db)c.appendChild(el("div","hint","ตอนนี้ยังไม่ได้เชื่อมต่อออนไลน์ ต้องเปิดผ่านลิงก์ที่แชร์และล็อกอิน"));
+  app.appendChild(c);
+}
+function enter(code){room=code;base="rooms/"+code;try{localStorage.setItem("rc-room",code)}catch(e){}words=[];players=[];allCount=0;timeoutKey=-1;start()}
+function onTick(){
+  if(!refs.timer)return;
+  var tp=turnPlayer(),n=words.length;
+  if(!db||!n||players.length<2||!tp){refs.timer.textContent="";return}
+  var left=TURN-Math.floor((Date.now()-words[n-1].ts)/1000);
+  refs.timer.textContent=left>0?"⏱ "+left+" วิ":"⏱ หมดเวลา!";
+  refs.timer.style.color=left<=8?"var(--bad)":"var(--ink)";
+  if(left<=-2&&timeoutKey!==allCount){
+    timeoutKey=allCount;
+    db.doc(base+"/words/t"+allCount).set({uid:tp.id,name:tp.name,skip:true,timeout:true,ts:Date.now()}).catch(function(){timeoutKey=-1});
+    var tc=words.filter(function(w){return w.timeout&&w.uid===tp.id}).length+1;
+    if(tc>=3)db.doc(base+"/players/"+tp.id).delete().catch(function(){});
+  }
+}
+function start(){
+  build();
+  if(!db){setMsg("โหมดเล่นคนเดียว: ต้องเปิดผ่านลิงก์ที่แชร์และล็อกอินเพื่อเล่นกับเพื่อน","");}
+  if(db){
+    writeErr=false;readErr=false;
+    db.doc(base+"/players/"+me.id).set({name:me.name,color:me.color,joined:Date.now()}).catch(function(){writeErr=true;draw()});
+    unsubs.push(db.collection(base+"/players").onSnapshot(function(s){
+      players=s.docs.map(function(d){var x=d.data();x.id=d.id;return x}).sort(function(a,b){return a.joined-b.joined||(a.id<b.id?-1:1)});
+      draw();
+    },function(){readErr=true;draw()}));
+    unsubs.push(db.collection(base+"/words").orderBy("ts","asc").limit(500).onSnapshot(function(s){
+      var all=s.docs.map(function(d){return d.data()}),i=0;
+      all.forEach(function(w,k){if(w.reset)i=k+1});
+      allCount=all.length;words=all.slice(i);draw();
+    },function(){readErr=true;draw()}));
+    tick=setInterval(onTick,1000);
+  }else{players=[{id:me.id,name:me.name,color:me.color,joined:0}];draw()}
+}
+
+function build(){
+  app.textContent="";
+  var h=el("h1","","ต่อคำ ");h.appendChild(el("span","","คล้องจอง"));app.appendChild(h);
+  var bar=el("div","card bar");bar.appendChild(el("span","hint","รหัสห้อง"));bar.appendChild(el("span","code",room));
+  refs.timer=el("span","tm","");bar.appendChild(refs.timer);
+  var lv=el("button","g","ออก");lv.onclick=function(){if(db)db.doc(base+"/players/"+me.id).delete().catch(function(){});lobby()};bar.appendChild(lv);
+  app.appendChild(bar);
+  refs.status=el("div","hint");app.appendChild(refs.status);
+  refs.rl=el("button","g","รีเฟรชหน้า");refs.rl.style.alignSelf="flex-start";refs.rl.onclick=function(){location.reload()};app.appendChild(refs.rl);
+  refs.big=el("div","card big");app.appendChild(refs.big);
+  refs.ref=el("div","ref");app.appendChild(refs.ref);
+  var f=el("div","card");
+  var r=el("div","row");
+  refs.inp=el("input");refs.inp.placeholder="พิมพ์คำของคุณ";refs.inp.maxLength=24;
+  refs.go=el("button","","ส่งคำ");
+  r.appendChild(refs.inp);r.appendChild(refs.go);f.appendChild(r);
+  refs.msg=el("div","msg");f.appendChild(refs.msg);
+  var r2=el("div","row");
+  refs.skip=el("button","g","ข้ามตา");
+  var rs=el("button","g","เริ่มรอบใหม่");
+  refs.hint=el("button","g","ขอใบ้จากกรรมการ");refs.hint.onclick=hint;
+  refs.chal=el("button","g","ท้วงคำล่าสุด");refs.chal.onclick=challenge;
+  r2.style.flexWrap="wrap";[refs.skip,refs.hint,refs.chal,rs].forEach(function(b){r2.appendChild(b)});f.appendChild(r2);
+  app.appendChild(f);
+  refs.inp.onkeydown=function(e){if(e.key==="Enter")submit()};
+  refs.go.onclick=submit;
+  refs.skip.onclick=function(){push({skip:true})};
+  rs.onclick=function(){if(confirm("เริ่มรอบใหม่ทุกคนเลยนะ?"))push({reset:true},true)};
+  var c1=el("div","card");c1.appendChild(el("b","","สายคำที่ต่อกันมา"));
+  refs.chain=el("div","chain");refs.chain.style.marginTop="8px";c1.appendChild(refs.chain);app.appendChild(c1);
+  var c2=el("div","card");c2.appendChild(el("b","","คะแนน"));
+  refs.sc=el("div","sc");refs.sc.style.marginTop="8px";c2.appendChild(refs.sc);app.appendChild(c2);
+}
+
+function played(){var v={};words.forEach(function(w){if(w.void)v[w.void]=1});return words.filter(function(w){return !w.skip&&!w.reset&&!w.void&&!v[w.ts]})}
+function turnPlayer(){
+  if(!players.length)return null;
+  return players[words.length%players.length];
+}
+function setMsg(t,k){if(!refs.msg)return;refs.msg.textContent=t;refs.msg.className="msg "+(k||"")}
+function push(o,force){
+  var m=Object.assign({uid:me.id,name:me.name,ts:Date.now()},o);
+  if(!db){if(o.reset)words=[];else words.push(m);draw();return}
+  db.collection(base+"/words").add(m).catch(function(){writeErr=true;draw();setMsg("ส่งไม่สำเร็จ ลองใหม่อีกครั้ง","bad")});
+}
+
+function draw(){
+  if(!refs.big)return;
+  var cw=usr&&usr.can?usr.can("data.write"):null;
+  refs.rl.style.display=(db&&!readErr)?"none":"inline-block";
+  refs.status.textContent=!db?(noRuntime?"⚠️ หน้านี้เปิดนอกลิงก์เกมที่เผยแพร่ จึงออนไลน์ไม่ได้ ให้เปิดจากลิงก์ artifact โดยตรง":"⚠️ ยังไม่ได้ออนไลน์: ระบบไม่ให้สิทธิ์ฐานข้อมูล ตรวจว่าเข้าสู่ระบบ Claude แล้วและเปิดจากลิงก์เกมที่เผยแพร่ จากนั้นกดรีเฟรช"):
+    (writeErr||cw===false)?"⚠️ บัญชีนี้มีสิทธิ์ดูอย่างเดียว ส่งคำไม่ได้ ให้เจ้าของเกมปรับสิทธิ์ของคุณเป็นผู้ร่วมแก้ไข":
+    readErr?"⚠️ เชื่อมต่อห้องไม่ได้ ลองรีเฟรชหน้า":
+    "🟢 ออนไลน์ · ในห้อง "+players.length+" คน: "+players.map(function(p){return p.name}).join(", ");
+  var pl=played(),last=pl[pl.length-1],tp=turnPlayer(),mine=!tp||tp.id===me.id;
+  refs.big.textContent="";
+  refs.big.appendChild(el("small","",last?"คำล่าสุดจาก "+last.name:"รอบใหม่ เริ่มด้วยคำอะไรก็ได้"));
+  refs.big.appendChild(el("div","w",last?last.word:"?"));
+  var t=el("div","turn"+(mine?" mine":""),mine?"ตาคุณแล้ว!":"ตาของ "+(tp?tp.name:"..."));
+  refs.big.appendChild(t);
+  refs.inp.disabled=!mine||busy;refs.go.disabled=!mine||busy;refs.skip.disabled=!mine||busy;
+  refs.ref.textContent="";
+  var fc=el("div","face","🧑‍⚖️");refs.ref.appendChild(fc);
+  var bx=el("div");bx.appendChild(el("b","","กรรมการ AI"));
+  bx.appendChild(document.createTextNode(refMsg||(last&&last.reason?(last.type?"["+last.type+"] ":"")+last.reason:"พร้อมตัดสินแล้ว! ส่งคำแรกมาได้เลย")));
+  refs.ref.appendChild(bx);
+  refs.chal.disabled=!last||busy||!sample;refs.hint.disabled=!last||busy||!sample||!mine;
+  refs.chain.textContent="";
+  if(!pl.length)refs.chain.appendChild(el("span","hint","ยังไม่มีคำ"));
+  pl.forEach(function(w,i){
+    if(i)refs.chain.appendChild(el("span","ar","→"));
+    var p=el("span","p",w.word);
+    if(w.type)p.appendChild(el("em","",w.type));
+    refs.chain.appendChild(p);
+  });
+  refs.chain.scrollTop=refs.chain.scrollHeight;
+  var cnt={};pl.forEach(function(w){cnt[w.uid]=(cnt[w.uid]||0)+1});words.forEach(function(w){if(w.timeout)cnt[w.uid]=(cnt[w.uid]||0)-1});
+  refs.sc.textContent="";
+  players.slice().sort(function(a,b){return (cnt[b.id]||0)-(cnt[a.id]||0)}).forEach(function(p){
+    var r=el("div",tp&&tp.id===p.id?"cur":"");
+    var d=el("span","dot");d.style.background=p.color||"#999";r.appendChild(d);
+    r.appendChild(el("span","",p.name+(p.id===me.id?" (คุณ)":"")));
+    r.appendChild(el("b","",String(cnt[p.id]||0)));refs.sc.appendChild(r);
+  });
+}
+
+var refMsg="";
+function judge(prev,w,strict){
+  return sample.json("คุณเป็นกรรมการเกมต่อคำคล้องจองภาษาไทย คำก่อนหน้า: \""+prev+"\" คำใหม่: \""+w+"\"\n"+
+  "คำใหม่ต้องคล้องจองกับคำก่อนหน้า คือสระและตัวสะกดเสียงเดียวกัน (เช่น น้ำ-ทำ-ลำ, กาน-งาน-บาน, ใจ-ไป-ใน ไม่ใช่) โดยนับทั้ง \"พ้องรูป\" (ส่วนท้ายสะกดเหมือนกัน) และ \"พ้องเสียง\" (สะกดต่างแต่ออกเสียงท้ายเหมือนกัน เช่น กรรม-ทำ) ไม่ต้องสนใจวรรณยุกต์ ต้องเป็นคำที่มีความหมายในภาษาไทย ไม่ใช่คำเดิมซ้ำ"+(strict?" มีคนท้วงคำนี้ ให้ตรวจละเอียดและเข้มงวดกว่าเดิม":"")+"\n"+
+  "ตอบเป็น JSON เท่านั้น: {\"ok\":true/false,\"type\":\"พ้องรูป\" หรือ \"พ้องเสียง\" หรือ \"\",\"reason\":\"เหตุผลสั้น ๆ ภาษาไทย\"}",{cache:false,modelTier:strict?"default":"quick"});
+}
+async function challenge(){
+  var pl=played();if(pl.length<2||busy||!sample){setMsg("ท้วงได้เมื่อมีอย่างน้อย 2 คำ","bad");return}
+  var l=pl[pl.length-1],pr=pl[pl.length-2];
+  busy=true;refMsg="กำลังพิจารณาคำท้วง...";draw();
+  var r=null;try{r=await judge(pr.word,l.word,true)}catch(e){}
+  busy=false;
+  if(!r){refMsg="";draw();setMsg("กรรมการตอบไม่ได้ในตอนนี้","bad");return}
+  if(r.ok===false){refMsg="⚖️ ท้วงสำเร็จ! \""+l.word+"\" ไม่ผ่าน: "+(r.reason||"");push({void:l.ts})}
+  else refMsg="⚖️ ท้วงไม่สำเร็จ \""+l.word+"\" ยังผ่านอยู่: "+(r.reason||"");
+  draw();
+}
+async function hint(){
+  var l=played().pop();if(!l||busy||!sample)return;
+  busy=true;refMsg="กรรมการกำลังคิดคำใบ้...";draw();
+  try{var r=await sample.json("ภาษาไทย ให้ใบ้ 3 คำที่คล้องจองกับคำว่า \""+l.word+"\" (สระและตัวสะกดเสียงเดียวกัน) ห้ามใช้คำนี้ ตอบ JSON เท่านั้น: {\"words\":[\"คำ1\",\"คำ2\",\"คำ3\"]}",{cache:false,modelTier:"quick"});
+    refMsg="💡 ใบ้: "+(r.words||[]).join(" , ")}catch(e){refMsg="ตอนนี้คิดคำใบ้ไม่ออก"}
+  busy=false;draw();
+}
+async function submit(){
+  if(busy)return;
+  var w=refs.inp.value.trim().replace(/\s+/g," ");
+  if(!w)return;
+  var pl=played(),last=pl[pl.length-1];
+  if(pl.some(function(x){return x.word===w})){setMsg("คำนี้ถูกใช้ไปแล้ว ลองคำอื่น","bad");return}
+  if(!last){refs.inp.value="";setMsg("","");push({word:w});return}
+  busy=true;draw();setMsg("กำลังตรวจคำคล้องจอง...","");
+  var res=null;
+  if(sample){try{res=await judge(last.word,w)}catch(e){res=null}}
+  busy=false;
+  if(res&&res.ok===false){refMsg="❌ \""+w+"\" ไม่ผ่าน: "+(res.reason||"ลองคำอื่น");draw();setMsg("ไม่คล้องจอง ลองคำอื่นอีกครั้ง","bad");return}
+  refMsg="";
+  refs.inp.value="";
+  push({word:w,type:res&&res.type||"",reason:res&&res.reason||""});
+  setMsg(res?"ผ่าน!":"ส่งแล้ว (ไม่มีกรรมการ AI ตอนนี้ เพื่อน ๆ ช่วยดูกันเอง)",res?"ok":"");
+  draw();
+}
+})();
+</script>
+</body>
+</html>
